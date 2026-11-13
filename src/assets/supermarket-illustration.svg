@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 470" fill="none">
+  <path d="M75 366c35-72 116-115 238-115 120 0 206 42 247 115v53H75v-53Z" fill="#D6EDE5"/>
+  <circle cx="518" cy="96" r="44" fill="#F8D984"/>
+  <circle cx="104" cy="119" r="24" fill="#F4C8A4"/>
+  <path d="M83 379c15-46 48-74 98-84 47-8 76 16 84 70l-3 25H83v-11Z" fill="#82C8A9"/>
+  <path d="M87 374c12-34 34-52 67-55" stroke="#fff" stroke-width="8" stroke-linecap="round"/>
+  <path d="M493 365c9-48 38-73 88-76 21 21 34 47 39 79v18H493v-21Z" fill="#A4D7B7"/>
+  <path d="M509 362c9-25 23-42 44-50" stroke="#fff" stroke-width="8" stroke-linecap="round"/>
+  <path d="M151 173h337l-30 187a31 31 0 0 1-30 26H216a31 31 0 0 1-30-26l-35-187Z" fill="#fff" stroke="#DCE8DF" stroke-width="8"/>
+  <path d="M179 205h282l-22 136a18 18 0 0 1-17 15H218a18 18 0 0 1-17-15l-22-136Z" fill="#F2B84B"/>
+  <path d="m205 220 22 128m34-128 10 128m44-128v128m49-128-10 128m51-128-22 128" stroke="#E59F32" stroke-width="9"/>
+  <path d="m228 173-18-46c-8-20 1-43 21-51l21-9 37 96-61 10Z" fill="#F17D54"/>
+  <path d="m265 164-4-78c-1-20 14-37 34-38l23-1 6 113-59 4Z" fill="#F7D35F"/>
+  <path d="m300 163 16-58c6-21 27-32 48-25l21 7-41 86-44-10Z" fill="#E95C55"/>
+  <path d="m348 172 32-76c9-20 31-28 51-18l20 10-57 96-46-12Z" fill="#7BBD7A"/>
+  <path d="m382 177 50-52c15-15 39-15 55 0l15 15-81 70-39-33Z" fill="#43A77A"/>
+  <path d="m205 221 24-17m34 17 10-18m44 18 1-18m47 18-9-18m50 18-20-18" stroke="#FFE7A0" stroke-width="8" stroke-linecap="round"/>
+  <path d="M477 260h49l24 107a25 25 0 0 1-24 31h-36" stroke="#317F72" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="490" cy="407" r="17" fill="#317F72"/>
+  <circle cx="535" cy="407" r="17" fill="#317F72"/>
+  <path d="M90 424h455" stroke="#B6D8C8" stroke-width="8" stroke-linecap="round"/>
+  <path d="M111 98c13-23 31-35 55-35 2 24-7 43-27 56m362-2c-12-17-28-25-49-25-1 20 7 36 25 46" stroke="#61A879" stroke-width="9" stroke-linecap="round"/>
+  <path d="M111 98c7 17 16 26 28 29m389-10c-7 12-17 19-30 21" stroke="#61A879" stroke-width="7" stroke-linecap="round"/>
+</svg>
