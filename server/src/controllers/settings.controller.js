@@ -1,4 +1,5 @@
 import asyncHandler from "../middleware/asyncHandler.js";
+import { hasPermission, toPublicUser } from "../security/permissions.js";
 import * as settings from "../services/settings.service.js";
 
 function resourceController({ create, update, remove, label }) {
@@ -19,23 +20,47 @@ function resourceController({ create, update, remove, label }) {
   };
 }
 
-export const getSettings = asyncHandler(async (_req, res) =>
-  res.json(await settings.getSettings()),
-);
-
-export const updateStoreSettings = asyncHandler(async (req, res) =>
-  res.json(await settings.updateStoreSettings(req.body)),
-);
-
-const branches = resourceController({
-  create: settings.createBranch,
-  update: settings.updateBranch,
-  remove: settings.deleteBranch,
-  label: "Branch",
+export const getSettings = asyncHandler(async (req, res) => {
+  const data = await settings.getSettings();
+  if (req.path === "/users") {
+    return res.json(await settings.getTeamMembers());
+  }
+  if (!hasPermission(req.user, "settings:manage")) {
+    return res.json({
+      store: {
+        name: data.store.name,
+        logoUrl: data.store.logoUrl,
+        currency: data.store.currency,
+      },
+      paymentMethods: data.paymentMethods.filter(
+        (method) => method.status === "Active",
+      ),
+      users: [],
+    });
+  }
+  res.json({
+    ...data,
+    users:
+      req.user.role === "Owner"
+        ? data.users.map(toPublicUser)
+        : [],
+  });
 });
-export const createBranch = branches.create;
-export const updateBranch = branches.update;
-export const deleteBranch = branches.remove;
+
+export const updateStoreSettings = asyncHandler(async (req, res) => {
+  const { logoUrl } = req.body;
+  if (
+    logoUrl &&
+    !/^https?:\/\/\S+$/i.test(logoUrl) &&
+    !/^data:image\/(?:png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(logoUrl)
+  ) {
+    return res.status(400).json({ error: "Choose a PNG, JPEG, or WebP logo." });
+  }
+  if (logoUrl?.startsWith("data:") && logoUrl.length > 5_000_000) {
+    return res.status(400).json({ error: "Logo file must be smaller than 3.5 MB." });
+  }
+  res.json(await settings.updateStoreSettings(req.body));
+});
 
 const paymentMethods = resourceController({
   create: settings.createPaymentMethod,

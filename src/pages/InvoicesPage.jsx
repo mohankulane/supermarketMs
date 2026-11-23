@@ -1,25 +1,25 @@
 import { useMemo, useState } from "react";
 import { Eye, FileText, Printer, Search } from "lucide-react";
 import ReceiptView from "../components/common/ReceiptView.jsx";
+import TableHeader, { matchesQuery } from "../components/common/TableHeader.jsx";
 
-function Invoices({ sales, customers, returns, storeName, onReturn }) {
+function Invoices({
+  sales,
+  returns,
+  storeName,
+  storeLogo,
+  onReturn,
+  canManageReturns = false,
+}) {
   const [query, setQuery] = useState("");
   const [invoice, setInvoice] = useState(null);
   const filteredSales = useMemo(() => {
     const search = query.trim().toLowerCase();
     if (!search) return sales;
-    return sales.filter((sale) => {
-      const customer =
-        sale.customer?.name ||
-        customers.find(
-          (record) => record._id === (sale.customer?._id || sale.customer),
-        )?.name ||
-        "Walk-in customer";
-      return `${sale.receiptNo} ${customer} ${sale.paymentMethod}`
-        .toLowerCase()
-        .includes(search);
-    });
-  }, [customers, query, sales]);
+    return sales.filter((sale) =>
+      `${sale.receiptNo} ${sale.paymentMethod}`.toLowerCase().includes(search),
+    );
+  }, [query, sales]);
 
   const totalSales = sales.reduce(
     (sum, sale) => sum + Number(sale.total || 0),
@@ -71,27 +71,21 @@ function Invoices({ sales, customers, returns, storeName, onReturn }) {
       </section>
 
       <section className="box inventory-table-box">
-        <div className="panel-title invoice-list-title">
-          <div>
-            <h3>Invoices</h3>
-            <p>View, print, and process returns for completed sales.</p>
-          </div>
-          <label className="invoice-search">
-            <Search size={16} />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search invoice or customer"
-            />
-          </label>
-        </div>
+        <TableHeader
+          title="Invoices"
+          icon={FileText}
+          count={filteredSales.length}
+          total={sales.length}
+          query={query}
+          onQueryChange={setQuery}
+          placeholder="Search invoice or payment..."
+        />
         <div className="responsive-table">
           <table>
             <thead>
               <tr>
                 <th>Invoice</th>
                 <th>Date</th>
-                <th>Customer</th>
                 <th>Items</th>
                 <th>Payment</th>
                 <th>Total</th>
@@ -100,20 +94,12 @@ function Invoices({ sales, customers, returns, storeName, onReturn }) {
             </thead>
             <tbody>
               {filteredSales.map((sale) => {
-                const customer =
-                  sale.customer?.name ||
-                  customers.find(
-                    (record) =>
-                      record._id === (sale.customer?._id || sale.customer),
-                  )?.name ||
-                  "Walk-in customer";
                 return (
                   <tr key={sale._id}>
                     <td>
                       <strong>{sale.receiptNo || sale._id.slice(-8)}</strong>
                     </td>
                     <td>{new Date(sale.createdAt).toLocaleString()}</td>
-                    <td>{customer}</td>
                     <td>
                       {sale.items?.reduce(
                         (sum, item) => sum + Number(item.quantity || 0),
@@ -147,7 +133,7 @@ function Invoices({ sales, customers, returns, storeName, onReturn }) {
               })}
               {!filteredSales.length && (
                 <tr>
-                  <td colSpan="7" className="empty-table-cell">
+                  <td colSpan="6" className="empty-table-cell">
                     <FileText size={19} />
                     {sales.length
                       ? "No invoices match your search."
@@ -169,15 +155,9 @@ function Invoices({ sales, customers, returns, storeName, onReturn }) {
       {invoice && (
         <ReceiptView
           sale={invoice}
-          customerName={
-            invoice.customer?.name ||
-            customers.find(
-              (record) =>
-                record._id === (invoice.customer?._id || invoice.customer),
-            )?.name
-          }
           storeName={storeName}
-          canReturn={canReturn(invoice)}
+          storeLogo={storeLogo}
+          canReturn={canManageReturns && canReturn(invoice)}
           close={() => setInvoice(null)}
           onReturn={() => {
             const selectedSale = invoice;

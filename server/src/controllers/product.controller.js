@@ -1,14 +1,33 @@
 import asyncHandler from "../middleware/asyncHandler.js";
+import { hasPermission } from "../security/permissions.js";
 import * as products from "../services/product.service.js";
 
-export const getProducts = asyncHandler(async (req, res) =>
-  res.json(await products.findProducts(req.query.search)),
-);
+function productForUser(req, product) {
+  if (hasPermission(req.user, "inventory:view")) return product;
+  const record = product.toObject ? product.toObject() : product;
+  return {
+    _id: record._id,
+    name: record.name,
+    category: record.category,
+    sku: record.sku,
+    barcode: record.barcode,
+    image: record.image,
+    price: record.price,
+    stock: record.stock,
+    reorderLevel: record.reorderLevel,
+    unit: record.unit,
+  };
+}
+
+export const getProducts = asyncHandler(async (req, res) => {
+  const records = await products.findProducts(req.query.search);
+  res.json(records.map((product) => productForUser(req, product)));
+});
 
 export const getProduct = asyncHandler(async (req, res) => {
   const product = await products.findProductById(req.params.id);
   if (!product) return res.status(404).json({ error: "Product not found" });
-  res.json(product);
+  res.json(productForUser(req, product));
 });
 
 export const createProduct = asyncHandler(async (req, res) =>
@@ -23,7 +42,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
     validateProductImage(req.body),
   );
   if (!product) return res.status(404).json({ error: "Product not found" });
-  res.json(product);
+  res.json(productForUser(req, product));
 });
 
 function validateProductImage(data) {
@@ -55,5 +74,5 @@ export const adjustStock = asyncHandler(async (req, res) => {
 export const getProductByBarcode = asyncHandler(async (req, res) => {
   const product = await products.findProductByBarcode(req.params.barcode);
   if (!product) return res.status(404).json({ error: "Product not found" });
-  res.json(product);
+  res.json(productForUser(req, product));
 });

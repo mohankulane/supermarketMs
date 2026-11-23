@@ -1,5 +1,15 @@
 import mongoose from "mongoose";
 
+const paymentSchema = new mongoose.Schema(
+  {
+    amount: { type: Number, required: true, min: 0.01 },
+    method: { type: String, default: "Cash" },
+    note: String,
+    paidAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
 const purchaseSchema = new mongoose.Schema(
   {
     supplier: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier" },
@@ -20,6 +30,8 @@ const purchaseSchema = new mongoose.Schema(
       default: "Draft",
     },
     total: Number,
+    paidAmount: { type: Number, default: 0, min: 0 },
+    payments: { type: [paymentSchema], default: [] },
     expectedDate: Date,
   },
   { timestamps: true },

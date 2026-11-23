@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { requireRole } from "../middleware/auth.middleware.js";
 import {
   getBackup,
   restoreBackupData,
@@ -6,7 +7,7 @@ import {
 
 const router = Router();
 
-router.get("/", getBackup);
-router.post("/restore", restoreBackupData);
+router.get("/", requireRole("Owner"), getBackup);
+router.post("/restore", requireRole("Owner"), restoreBackupData);
 
 export default router;

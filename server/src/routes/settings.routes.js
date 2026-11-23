@@ -1,13 +1,15 @@
 import { Router } from "express";
 import {
-  createBranch,
+  requireAnyPermission,
+  requirePermission,
+  requireRole,
+} from "../middleware/auth.middleware.js";
+import {
   createPaymentMethod,
   createTeamMember,
-  deleteBranch,
   deletePaymentMethod,
   deleteTeamMember,
   getSettings,
-  updateBranch,
   updatePaymentMethod,
   updateStoreSettings,
   updateTeamMember,
@@ -15,16 +17,30 @@ import {
 
 const router = Router();
 
-router.get("/", getSettings);
-router.patch("/", updateStoreSettings);
-router.post("/branches", createBranch);
-router.patch("/branches/:id", updateBranch);
-router.delete("/branches/:id", deleteBranch);
-router.post("/payment-methods", createPaymentMethod);
-router.patch("/payment-methods/:id", updatePaymentMethod);
-router.delete("/payment-methods/:id", deletePaymentMethod);
-router.post("/users", createTeamMember);
-router.patch("/users/:id", updateTeamMember);
-router.delete("/users/:id", deleteTeamMember);
+router.get(
+  "/",
+  requireAnyPermission("settings:manage", "sales:use"),
+  getSettings,
+);
+router.patch("/", requirePermission("settings:manage"), updateStoreSettings);
+router.post(
+  "/payment-methods",
+  requirePermission("settings:manage"),
+  createPaymentMethod,
+);
+router.patch(
+  "/payment-methods/:id",
+  requirePermission("settings:manage"),
+  updatePaymentMethod,
+);
+router.delete(
+  "/payment-methods/:id",
+  requirePermission("settings:manage"),
+  deletePaymentMethod,
+);
+router.get("/users", requireRole("Owner"), getSettings);
+router.post("/users", requireRole("Owner"), createTeamMember);
+router.patch("/users/:id", requireRole("Owner"), updateTeamMember);
+router.delete("/users/:id", requireRole("Owner"), deleteTeamMember);
 
 export default router;

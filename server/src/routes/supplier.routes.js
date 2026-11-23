@@ -1,5 +1,9 @@
 import { Router } from "express";
 import {
+  requireAnyPermission,
+  requirePermission,
+} from "../middleware/auth.middleware.js";
+import {
   createSupplier,
   deleteSupplier,
   getSuppliers,
@@ -8,9 +12,13 @@ import {
 
 const router = Router();
 
-router.get("/", getSuppliers);
-router.post("/", createSupplier);
-router.patch("/:id", updateSupplier);
-router.delete("/:id", deleteSupplier);
+router.get(
+  "/",
+  requireAnyPermission("suppliers:view", "purchases:view", "reports:view"),
+  getSuppliers,
+);
+router.post("/", requirePermission("suppliers:manage"), createSupplier);
+router.patch("/:id", requirePermission("suppliers:manage"), updateSupplier);
+router.delete("/:id", requirePermission("suppliers:manage"), deleteSupplier);
 
 export default router;

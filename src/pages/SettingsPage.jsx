@@ -10,6 +10,11 @@ import {
 } from "lucide-react";
 import { api } from "../api/api.js";
 import Modal from "../components/common/Modal.jsx";
+import Audit from "./AuditPage.jsx";
+import {
+  DEFAULT_ROLE_PERMISSIONS,
+  PERMISSION_GROUPS,
+} from "../auth/permissions.js";
 
 const blankPayment = {
   name: "",
@@ -22,9 +27,18 @@ const blankUser = {
   email: "",
   role: "Cashier",
   status: "Active",
+  password: "",
+  permissions: DEFAULT_ROLE_PERMISSIONS.Cashier,
 };
 
-function SettingsPage({ settings, perform }) {
+function SettingsPage({
+  settings,
+  audit = [],
+  perform,
+  canManageSettings,
+  canManageUsers,
+  canViewAudit,
+}) {
   const [storeForm, setStoreForm] = useState({
     name: "",
     logoUrl: "",
@@ -33,6 +47,7 @@ function SettingsPage({ settings, perform }) {
     taxRate: 0,
   });
   const [editor, setEditor] = useState(null);
+  const [logoError, setLogoError] = useState("");
 
   useEffect(() => {
     setStoreForm({
@@ -41,7 +56,7 @@ function SettingsPage({ settings, perform }) {
       receiptFooter:
         settings.store?.receiptFooter ||
         "Thank you for shopping with FreshMart.",
-      currency: settings.store?.currency || "USD",
+      currency: "USD",
       taxRate: settings.store?.taxRate ?? 0,
     });
   }, [settings.store?._id, settings.store?.updatedAt]);
@@ -52,6 +67,31 @@ function SettingsPage({ settings, perform }) {
       () => api.settings.update(storeForm),
       "Store settings saved.",
     );
+  };
+
+  const chooseLogo = (event) => {
+    const [file] = event.target.files || [];
+    event.target.value = "";
+    if (!file) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setLogoError("Choose a PNG, JPEG, or WebP image.");
+      return;
+    }
+    if (file.size > 3.5 * 1024 * 1024) {
+      setLogoError("Logo file must be smaller than 3.5 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        setLogoError("The logo could not be read.");
+        return;
+      }
+      setStoreForm((current) => ({ ...current, logoUrl: reader.result }));
+      setLogoError("");
+    };
+    reader.onerror = () => setLogoError("The logo could not be read.");
+    reader.readAsDataURL(file);
   };
 
   const saveResource = async (event) => {
@@ -80,12 +120,21 @@ function SettingsPage({ settings, perform }) {
       payment: blankPayment,
       user: blankUser,
     }[type];
-    setEditor({ type, ...defaults, ...(item || {}) });
+    const role = item?.role || defaults.role;
+    setEditor({
+      type,
+      ...defaults,
+      ...(item || {}),
+      password: "",
+      permissions:
+        item?.permissions || DEFAULT_ROLE_PERMISSIONS[role] || [],
+    });
   };
 
   return (
     <div className="page settings-page">
-      <section className="box settings-panel">
+      {canManageSettings && (
+        <section className="box settings-panel">
         <div className="settings-title">
           <span>
             <Settings size={17} />
@@ -107,32 +156,40 @@ function SettingsPage({ settings, perform }) {
                 }
               />
             </label>
-            <label>
-              Logo URL
+            <label className="form-span-2 logo-upload-field">
+              Store logo
               <input
-                type="url"
-                placeholder="https://example.com/logo.png"
-                value={storeForm.logoUrl}
-                onChange={(event) =>
-                  setStoreForm({ ...storeForm, logoUrl: event.target.value })
-                }
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={chooseLogo}
               />
-              <small>
-                Enter a public image URL to display your store logo.
-              </small>
+              <small>Upload PNG, JPEG, or WebP (up to 3.5 MB).</small>
+              {logoError && <small className="field-error">{logoError}</small>}
             </label>
+            {storeForm.logoUrl && (
+              <div className="form-span-2 logo-preview">
+                <img
+                  src={storeForm.logoUrl}
+                  alt="Store logo preview"
+                  onError={() =>
+                    setLogoError("This saved logo could not be displayed.")
+                  }
+                />
+                <button
+                  type="button"
+                  className="outline-btn"
+                  onClick={() =>
+                    setStoreForm((current) => ({ ...current, logoUrl: "" }))
+                  }
+                >
+                  Remove logo
+                </button>
+              </div>
+            )}
             <label>
               Currency
-              <select
-                value={storeForm.currency}
-                onChange={(event) =>
-                  setStoreForm({ ...storeForm, currency: event.target.value })
-                }
-              >
+              <select value="USD" disabled>
                 <option value="USD">USD — US Dollar</option>
-                <option value="KES">KES — Kenyan Shilling</option>
-                <option value="EUR">EUR — Euro</option>
-                <option value="GBP">GBP — British Pound</option>
               </select>
             </label>
             <label>
@@ -167,9 +224,11 @@ function SettingsPage({ settings, perform }) {
             </button>
           </div>
         </form>
-      </section>
+        </section>
+      )}
 
-      <section className="box settings-panel">
+      {canManageSettings && (
+        <section className="box settings-panel">
         <div className="settings-title settings-section-heading">
           <span>
             <CreditCard size={17} />
@@ -223,9 +282,11 @@ function SettingsPage({ settings, perform }) {
             </p>
           )}
         </div>
-      </section>
+        </section>
+      )}
 
-      <section className="box settings-panel user-panel">
+      {canManageUsers && (
+        <section className="box settings-panel user-panel">
         <div className="settings-title settings-section-heading">
           <span>
             <Users size={17} />
@@ -256,6 +317,9 @@ function SettingsPage({ settings, perform }) {
                   <td>{user.email}</td>
                   <td>
                     <span className="role-pill">{user.role}</span>
+                    <small className="user-permission-count">
+                      {user.permissions?.length || 0} permissions
+                    </small>
                   </td>
                   <td>
                     <span
@@ -300,7 +364,10 @@ function SettingsPage({ settings, perform }) {
             </tbody>
           </table>
         </div>
-      </section>
+        </section>
+      )}
+
+      {canViewAudit && <Audit audit={audit} embedded />}
 
       {editor && (
         <Modal
@@ -384,16 +451,38 @@ function SettingsPage({ settings, perform }) {
                 Role
                 <select
                   value={editor.role}
-                  onChange={(event) =>
-                    setEditor({ ...editor, role: event.target.value })
-                  }
+                  onChange={(event) => {
+                    const role = event.target.value;
+                    setEditor({
+                      ...editor,
+                      role,
+                      permissions: DEFAULT_ROLE_PERMISSIONS[role],
+                    });
+                  }}
                 >
                   <option>Cashier</option>
                   <option>Manager</option>
                   <option>Owner</option>
                 </select>
               </label>
-              <label className="form-span-2">
+              <label>
+                {editor._id ? "Reset password (optional)" : "Temporary password"}
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  required={!editor._id}
+                  minLength={10}
+                  value={editor.password}
+                  onChange={(event) =>
+                    setEditor({ ...editor, password: event.target.value })
+                  }
+                />
+                <small>
+                  At least 10 characters. The user must change it at first
+                  sign-in.
+                </small>
+              </label>
+              <label>
                 Status
                 <select
                   value={editor.status}
@@ -405,6 +494,43 @@ function SettingsPage({ settings, perform }) {
                   <option>Inactive</option>
                 </select>
               </label>
+              <fieldset
+                className="permission-fieldset form-span-2"
+                disabled={editor.role === "Owner"}
+              >
+                <legend>Access and privileges</legend>
+                {PERMISSION_GROUPS.map((group) => (
+                  <div className="permission-group" key={group.title}>
+                    <h4>{group.title}</h4>
+                    <div className="permission-grid">
+                      {group.permissions.map(([permission, label]) => (
+                        <label className="checkbox-field" key={permission}>
+                          <input
+                            type="checkbox"
+                            checked={editor.permissions.includes(permission)}
+                            onChange={(event) => {
+                              const permissions = new Set(editor.permissions);
+                              if (event.target.checked) {
+                                permissions.add(permission);
+                              } else {
+                                permissions.delete(permission);
+                              }
+                              setEditor({
+                                ...editor,
+                                permissions: [...permissions],
+                              });
+                            }}
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                {editor.role === "Owner" && (
+                  <small>Owners always have full system access.</small>
+                )}
+              </fieldset>
             </div>
           )}
         </Modal>

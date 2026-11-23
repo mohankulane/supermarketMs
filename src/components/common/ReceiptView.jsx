@@ -1,12 +1,15 @@
+import { createPortal } from "react-dom";
 import { Printer, RotateCcw, X } from "lucide-react";
+import freshmartLogo from "../../assets/freshmart-logo.svg";
+import Barcode from "./Barcode.jsx";
 
 function ReceiptView({
   sale,
   close,
   onReturn,
   canReturn = true,
-  customerName,
   storeName = "FreshMart Supermarket",
+  storeLogo,
 }) {
   const items = (sale.items || []).map((item) =>
     Array.isArray(item)
@@ -22,22 +25,8 @@ function ReceiptView({
     );
   const discount = Number(sale.discount || 0);
   const date = sale.createdAt ? new Date(sale.createdAt) : new Date();
-  const encoded = Array.from(receiptNumber)
-    .flatMap((character) =>
-      character.charCodeAt(0).toString(2).padStart(8, "0").split(""),
-    )
-    .map((bit, index) => (
-      <rect
-        key={index}
-        x={index * 2}
-        y="0"
-        width={bit === "1" ? 1.5 : 0.8}
-        height="40"
-        fill="#111"
-      />
-    ));
 
-  return (
+  return createPortal(
     <div className="mask receipt-mask" role="presentation" onMouseDown={close}>
       <section
         className="thermal receipt-card"
@@ -71,6 +60,15 @@ function ReceiptView({
 
         <div className="receipt-paper">
           <header className="receipt-heading">
+            <img
+              className="receipt-logo"
+              src={storeLogo || freshmartLogo}
+              alt={`${storeName} logo`}
+              onError={(event) => {
+                event.currentTarget.onerror = null;
+                event.currentTarget.src = freshmartLogo;
+              }}
+            />
             <h2>{storeName}</h2>
             <p>Thank you for shopping with us</p>
           </header>
@@ -82,10 +80,6 @@ function ReceiptView({
             <div>
               <span>Date</span>
               <strong>{date.toLocaleString()}</strong>
-            </div>
-            <div>
-              <span>Customer</span>
-              <strong>{customerName || "Walk-in customer"}</strong>
             </div>
           </div>
 
@@ -134,24 +128,15 @@ function ReceiptView({
             </div>
           </div>
 
-          <div className="receipt-barcode">
-            <svg
-              viewBox={`0 0 ${Math.max(receiptNumber.length * 16, 1)} 40`}
-              role="img"
-              aria-label={`Invoice number ${receiptNumber}`}
-              preserveAspectRatio="none"
-            >
-              {encoded}
-            </svg>
-            <span>{receiptNumber}</span>
-          </div>
+          <Barcode className="receipt-barcode" value={receiptNumber} height={40} />
           <footer className="receipt-thanks">
             <strong>We appreciate your business!</strong>
             <span>Please visit us again.</span>
           </footer>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

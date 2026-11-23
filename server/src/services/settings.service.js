@@ -1,7 +1,12 @@
-import Branch from "../models/Branch.model.js";
 import PaymentMethod from "../models/PaymentMethod.model.js";
 import StoreSetting from "../models/StoreSetting.model.js";
 import TeamMember from "../models/TeamMember.model.js";
+import { hashPassword, validatePassword } from "../security/passwords.js";
+import {
+  DEFAULT_ROLE_PERMISSIONS,
+  normalizePermissions,
+  toPublicUser,
+} from "../security/permissions.js";
 
 export async function getSettings() {
   const [store] = await Promise.all([
@@ -11,9 +16,6 @@ export async function getSettings() {
       { new: true, upsert: true, setDefaultsOnInsert: true },
     ),
   ]);
-  if (!(await Branch.exists({}))) {
-    await Branch.create({ name: "Main Branch", isMain: true });
-  }
   if (!(await PaymentMethod.exists({}))) {
     await PaymentMethod.insertMany([
       { name: "Cash", isDefault: true },
@@ -21,12 +23,11 @@ export async function getSettings() {
       { name: "M-Pesa" },
     ]);
   }
-  const [branches, paymentMethods, users] = await Promise.all([
-    Branch.find().sort({ isMain: -1, createdAt: 1 }),
+  const [paymentMethods, users] = await Promise.all([
     PaymentMethod.find().sort({ isDefault: -1, name: 1 }),
     TeamMember.find().sort({ createdAt: 1 }),
   ]);
-  return { store, branches, paymentMethods, users };
+  return { store, paymentMethods, users };
 }
 
 export const updateStoreSettings = (data) =>
@@ -35,30 +36,6 @@ export const updateStoreSettings = (data) =>
     { $set: data },
     { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
   );
-
-export const createBranch = (data) => Branch.create(data);
-export async function updateBranch(id, data) {
-  const branch = await Branch.findById(id);
-  if (!branch) return null;
-  if (data.isMain)
-    await Branch.updateMany({ _id: { $ne: id } }, { isMain: false });
-  Object.assign(branch, data);
-  return branch.save();
-}
-
-export async function deleteBranch(id) {
-  const branch = await Branch.findById(id);
-  if (!branch) return null;
-  if (branch.isMain) {
-    const error = new Error(
-      "Set another branch as the main branch before removing this one",
-    );
-    error.status = 409;
-    throw error;
-  }
-  await branch.deleteOne();
-  return branch;
-}
 
 export async function createPaymentMethod(data) {
   if (data.isDefault) {
@@ -91,7 +68,97 @@ export async function deletePaymentMethod(id) {
   return method;
 }
 
-export const createTeamMember = (data) => TeamMember.create(data);
-export const updateTeamMember = (id, data) =>
-  TeamMember.findByIdAndUpdate(id, data, { new: true, runValidators: true });
-export const deleteTeamMember = (id) => TeamMember.findByIdAndDelete(id);
+export async function getTeamMembers() {
+  const users = await TeamMember.find().sort({ createdAt: 1 });
+  return users.map(toPublicUser);
+}
+
+export async function createTeamMember(data) {
+  if (!validatePassword(data.password)) {
+    const error = new Error("Password must be at least 10 characters.");
+    error.status = 400;
+    throw error;
+  }
+  if (data.permissions !== undefined && !Array.isArray(data.permissions)) {
+    const error = new Error("Permissions must be a list.");
+    error.status = 400;
+    throw error;
+  }
+  const role = data.role || "Cashier";
+  const user = await TeamMember.create({
+    name: data.name,
+    email: data.email,
+    role,
+    status: data.status || "Active",
+    permissions: normalizePermissions(
+      role,
+      data.permissions ?? DEFAULT_ROLE_PERMISSIONS[role],
+    ),
+    passwordHash: await hashPassword(data.password),
+    mustChangePassword: true,
+  });
+  return toPublicUser(user);
+}
+
+export async function updateTeamMember(id, data) {
+  const user = await TeamMember.findById(id);
+  if (!user) return null;
+  if (data.permissions !== undefined && !Array.isArray(data.permissions)) {
+    const error = new Error("Permissions must be a list.");
+    error.status = 400;
+    throw error;
+  }
+  const roleChanged = data.role !== undefined && data.role !== user.role;
+  const nextRole = data.role || user.role;
+  const nextStatus = data.status || user.status;
+  if (
+    user.role === "Owner" &&
+    user.status === "Active" &&
+    (nextRole !== "Owner" || nextStatus !== "Active") &&
+    (await TeamMember.countDocuments({ role: "Owner", status: "Active" })) <= 1
+  ) {
+    const error = new Error("The last active Owner cannot be deactivated.");
+    error.status = 409;
+    throw error;
+  }
+  if (data.name !== undefined) user.name = data.name;
+  if (data.email !== undefined) user.email = data.email;
+  if (data.role !== undefined) user.role = nextRole;
+  if (data.status !== undefined) user.status = nextStatus;
+  if (data.permissions !== undefined || data.role !== undefined) {
+    user.permissions = normalizePermissions(
+      nextRole,
+      data.permissions ??
+        (roleChanged
+          ? DEFAULT_ROLE_PERMISSIONS[nextRole]
+          : user.permissions),
+    );
+  }
+  if (data.password) {
+    if (!validatePassword(data.password)) {
+      const error = new Error("Password must be at least 10 characters.");
+      error.status = 400;
+      throw error;
+    }
+    user.passwordHash = await hashPassword(data.password);
+    user.mustChangePassword = true;
+  }
+  await user.save();
+  return toPublicUser(user);
+}
+
+export async function deleteTeamMember(id) {
+  const user = await TeamMember.findById(id);
+  if (!user) return null;
+  if (
+    user.role === "Owner" &&
+    user.status === "Active" &&
+    (await TeamMember.countDocuments({ role: "Owner", status: "Active" })) <= 1
+  ) {
+    const error = new Error("The last active Owner cannot be removed.");
+    error.status = 409;
+    throw error;
+  }
+  await user.deleteOne();
+  return user;
+}

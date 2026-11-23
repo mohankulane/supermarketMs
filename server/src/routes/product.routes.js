@@ -1,5 +1,9 @@
 import { Router } from "express";
 import {
+  requireAnyPermission,
+  requirePermission,
+} from "../middleware/auth.middleware.js";
+import {
   adjustStock,
   createProduct,
   deleteProduct,
@@ -11,12 +15,43 @@ import {
 
 const router = Router();
 
-router.get("/barcode/:barcode", getProductByBarcode);
-router.get("/:id", getProduct);
-router.get("/", getProducts);
-router.post("/", createProduct);
-router.patch("/:id", updateProduct);
-router.delete("/:id", deleteProduct);
-router.post("/:id/stock", adjustStock);
+router.get(
+  "/barcode/:barcode",
+  requireAnyPermission(
+    "inventory:view",
+    "sales:use",
+    "returns:view",
+    "reports:view",
+  ),
+  getProductByBarcode,
+);
+router.get(
+  "/:id",
+  requireAnyPermission(
+    "inventory:view",
+    "sales:use",
+    "returns:view",
+    "reports:view",
+  ),
+  getProduct,
+);
+router.get(
+  "/",
+  requireAnyPermission(
+    "inventory:view",
+    "sales:use",
+    "returns:view",
+    "reports:view",
+  ),
+  getProducts,
+);
+router.post("/", requirePermission("inventory:manage"), createProduct);
+router.patch("/:id", requirePermission("inventory:manage"), updateProduct);
+router.delete("/:id", requirePermission("inventory:manage"), deleteProduct);
+router.post(
+  "/:id/stock",
+  requirePermission("inventory:manage"),
+  adjustStock,
+);
 
 export default router;

@@ -11,7 +11,9 @@ import {
   Upload,
 } from "lucide-react";
 import Modal from "../components/common/Modal.jsx";
+import TableHeader, { matchesQuery } from "../components/common/TableHeader.jsx";
 import BarcodeScanner from "../components/common/BarcodeScanner.jsx";
+import Barcode from "../components/common/Barcode.jsx";
 import { api } from "../api/api.js";
 
 const blankProduct = {
@@ -26,13 +28,36 @@ const blankProduct = {
   image: "",
 };
 
-function Inventory({ products, perform, searchQuery = "" }) {
+function Inventory({ products, perform, searchQuery = "", canManage = false }) {
   const [query, setQuery] = useState(searchQuery);
+  const [stockFilter, setStockFilter] = useState("All");
   const [editor, setEditor] = useState(null);
   const [stockProduct, setStockProduct] = useState(null);
   const [stockAmount, setStockAmount] = useState("");
   const [imageError, setImageError] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [labelProduct, setLabelProduct] = useState(null);
+
+  const printLabel = (event) => {
+    event?.preventDefault();
+    const label = document.getElementById("product-label-print");
+    if (!label) return;
+    const printWindow = window.open("", "_blank", "width=420,height=360");
+    if (!printWindow) return;
+    printWindow.document.write(`<!doctype html><html><head><title>Barcode label</title>
+      <style>
+        body { margin: 0; display: grid; place-items: center; min-height: 100vh; font-family: Arial, sans-serif; }
+        .product-label { width: 280px; padding: 14px; text-align: center; }
+        .product-label b { display: block; font-size: 14px; margin-bottom: 2px; }
+        .product-label small { display: block; font-size: 12px; margin-bottom: 8px; }
+        .barcode svg { width: 100%; height: 60px; display: block; }
+        .barcode span { display: block; font-family: monospace; font-size: 12px; letter-spacing: 1px; margin-top: 4px; }
+      </style></head><body>${label.outerHTML}</body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    printWindow.close();
+  };
 
   useEffect(() => {
     setQuery(searchQuery);
@@ -40,14 +65,18 @@ function Inventory({ products, perform, searchQuery = "" }) {
 
   const visibleProducts = useMemo(() => {
     const search = query.trim().toLowerCase();
-    return products.filter(
-      (product) =>
+    return products.filter((product) => {
+      const low = product.stock <= product.reorderLevel;
+      if (stockFilter === "Low" && !low) return false;
+      if (stockFilter === "In" && low) return false;
+      return (
         !search ||
         product.name.toLowerCase().includes(search) ||
         product.sku.toLowerCase().includes(search) ||
-        product.category.toLowerCase().includes(search),
-    );
-  }, [products, query]);
+        product.category.toLowerCase().includes(search)
+      );
+    });
+  }, [products, query, stockFilter]);
 
   const saveProduct = async (event) => {
     event.preventDefault();
@@ -105,44 +134,47 @@ function Inventory({ products, perform, searchQuery = "" }) {
       <section className="box inventory-toolbar">
         <div>
           <h3>Products</h3>
-          <p>Manage your product catalog, prices, and stock levels.</p>
+          <p>
+            {canManage
+              ? "Manage your product catalog, prices, and stock levels."
+              : "Browse the product catalog, prices, and stock levels."}
+          </p>
         </div>
         <div className="inventory-actions">
-          <label className="table-search">
-            <Search size={16} />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search products..."
-            />
-          </label>
-          <button className="outline-btn" onClick={() => window.print()}>
-            <Printer size={15} /> Print
-          </button>
-          <button
-            className="primary-btn"
-            onClick={() => {
-              setImageError("");
-              setEditor({ ...blankProduct });
-            }}
-          >
-            <Plus size={16} /> Add product
-          </button>
+          {canManage && (
+            <button
+              className="primary-btn"
+              onClick={() => {
+                setImageError("");
+                setEditor({ ...blankProduct });
+              }}
+            >
+              <Plus size={16} /> Add product
+            </button>
+          )}
         </div>
       </section>
 
       <section className="box inventory-table-box">
-        <div className="inventory-summary">
-          <span>{products.length} products in inventory</span>
-          <span>
-            {
-              products.filter(
-                (product) => product.stock <= product.reorderLevel,
-              ).length
-            }{" "}
-            need restocking
-          </span>
-        </div>
+        <TableHeader
+          title="Products"
+          icon={Package}
+          count={visibleProducts.length}
+          total={products.length}
+          query={query}
+          onQueryChange={setQuery}
+          placeholder="Search products, SKU or category..."
+          filter={{
+            label: "Stock",
+            value: stockFilter,
+            onChange: setStockFilter,
+            options: [
+              ["All", "All stock"],
+              ["Low", `Needs restocking (${products.filter((product) => product.stock <= product.reorderLevel).length})`],
+              ["In", "In stock"],
+            ],
+          }}
+        />
         <div className="responsive-table">
           <table>
             <thead>
@@ -152,7 +184,7 @@ function Inventory({ products, perform, searchQuery = "" }) {
                 <th>Price</th>
                 <th>Stock</th>
                 <th>Status</th>
-                <th>Actions</th>
+                {canManage && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -190,57 +222,67 @@ function Inventory({ products, perform, searchQuery = "" }) {
                         {low ? "Low stock" : "In stock"}
                       </span>
                     </td>
-                    <td>
-                      <div className="row-actions">
-                        <button
-                          className="small-action"
-                          title="Receive stock"
-                          onClick={() => {
-                            setStockProduct(product);
-                            setStockAmount("");
-                          }}
-                        >
-                          <Plus size={14} /> Stock
-                        </button>
-                        <button
-                          className="icon-btn"
-                          title="Edit product"
-                          onClick={() => {
-                            setImageError("");
-                            setEditor({
-                              ...blankProduct,
-                              ...product,
-                              price: String(product.price),
-                              cost: String(product.cost || 0),
-                              stock: String(product.stock),
-                              reorderLevel: String(product.reorderLevel),
-                            });
-                          }}
-                        >
-                          <Pencil size={15} />
-                        </button>
-                        <button
-                          className="icon-btn danger-icon"
-                          title="Delete product"
-                          onClick={() => {
-                            if (window.confirm(`Delete ${product.name}?`)) {
-                              perform(
-                                () => api.products.remove(product._id),
-                                "Product deleted.",
-                              );
-                            }
-                          }}
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </td>
+                    {canManage && (
+                      <td>
+                        <div className="row-actions">
+                          <button
+                            className="small-action"
+                            title="Receive stock"
+                            onClick={() => {
+                              setStockProduct(product);
+                              setStockAmount("");
+                            }}
+                          >
+                            <Plus size={14} /> Stock
+                          </button>
+                          <button
+                            className="icon-btn"
+                            title="Print barcode label"
+                            aria-label={`Print barcode label for ${product.name}`}
+                            onClick={() => setLabelProduct(product)}
+                          >
+                            <Printer size={15} />
+                          </button>
+                          <button
+                            className="icon-btn"
+                            title="Edit product"
+                            onClick={() => {
+                              setImageError("");
+                              setEditor({
+                                ...blankProduct,
+                                ...product,
+                                price: String(product.price),
+                                cost: String(product.cost || 0),
+                                stock: String(product.stock),
+                                reorderLevel: String(product.reorderLevel),
+                              });
+                            }}
+                          >
+                            <Pencil size={15} />
+                          </button>
+                          <button
+                            className="icon-btn danger-icon"
+                            title="Delete product"
+                            onClick={() => {
+                              if (window.confirm(`Delete ${product.name}?`)) {
+                                perform(
+                                  () => api.products.remove(product._id),
+                                  "Product deleted.",
+                                );
+                              }
+                            }}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
               {!visibleProducts.length && (
                 <tr>
-                  <td colSpan="6" className="empty-table-cell">
+                  <td colSpan={canManage ? 6 : 5} className="empty-table-cell">
                     <Package size={19} />
                     {products.length
                       ? "No products match your search."
@@ -420,6 +462,25 @@ function Inventory({ products, perform, searchQuery = "" }) {
               onChange={(event) => setStockAmount(event.target.value)}
             />
           </label>
+        </Modal>
+      )}
+      {labelProduct && (
+        <Modal
+          title="Barcode label"
+          onClose={() => setLabelProduct(null)}
+          onSubmit={printLabel}
+          submitLabel="Print label"
+        >
+          <div className="product-label" id="product-label-print">
+            <b>{labelProduct.name}</b>
+            <small>${Number(labelProduct.price || 0).toFixed(2)}</small>
+            <Barcode value={labelProduct.barcode || labelProduct.sku} height={60} />
+          </div>
+          <p className="product-label-note">
+            {labelProduct.barcode
+              ? "This product's own barcode."
+              : "Uses this product's SKU. Scanning it at checkout finds the product."}
+          </p>
         </Modal>
       )}
       {scannerOpen && (

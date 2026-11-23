@@ -15,6 +15,15 @@ export const updatePurchase = asyncHandler(async (req, res) => {
   res.json(purchase);
 });
 
+export const recordPurchasePayment = asyncHandler(async (req, res) => {
+  const purchase = await purchases.recordPurchasePayment(
+    req.params.id,
+    req.body,
+  );
+  if (!purchase) return res.status(404).json({ error: "Purchase not found" });
+  res.json(purchase);
+});
+
 export const deletePurchase = asyncHandler(async (req, res) => {
   const purchase = await purchases.deletePurchase(req.params.id);
   if (!purchase) return res.status(404).json({ error: "Purchase not found" });

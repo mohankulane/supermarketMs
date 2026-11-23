@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import TableHeader, { matchesQuery } from "../components/common/TableHeader.jsx";
 import { Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { api } from "../api/api.js";
 import Modal from "../components/common/Modal.jsx";
@@ -38,8 +39,25 @@ function Returns({
   perform,
   returnTarget,
   clearReturnTarget,
+  canManage = false,
 }) {
   const [editor, setEditor] = useState(null);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const returnStatuses = [
+    "All",
+    ...new Set(returns.map((record) => record.status).filter(Boolean)),
+  ];
+  const visibleReturns = returns.filter(
+    (record) =>
+      (statusFilter === "All" || record.status === statusFilter) &&
+      matchesQuery(
+        query,
+        record._id,
+        record.sale?.receiptNo,
+        ...(record.items || []).map((item) => item.product?.name),
+      ),
+  );
 
   const remainingFor = (saleId, productId, exceptReturnId) => {
     const sale = sales.find((record) => record._id === saleId);
@@ -91,9 +109,9 @@ function Returns({
 
   useEffect(() => {
     if (!returnTarget) return;
-    returnFromSale(returnTarget);
+    if (canManage) returnFromSale(returnTarget);
     clearReturnTarget();
-  }, [returnTarget?._id]);
+  }, [returnTarget?._id, canManage]);
 
   const newReturn = () => ({
     sale: "",
@@ -171,15 +189,32 @@ function Returns({
           <h3>Returns and refunds</h3>
           <p>Link returns to invoices to prevent returning more than purchased.</p>
         </div>
-        <button
-          className="primary-btn"
-          disabled={!products.length}
-          onClick={() => setEditor(newReturn())}
-        >
-          <Plus size={16} /> Process return
-        </button>
+        {canManage && (
+          <button
+            className="primary-btn"
+            disabled={!products.length}
+            onClick={() => setEditor(newReturn())}
+          >
+            <Plus size={16} /> Process return
+          </button>
+        )}
       </section>
       <section className="box inventory-table-box">
+        <TableHeader
+          title="Returns"
+          icon={RotateCcw}
+          count={visibleReturns.length}
+          total={returns.length}
+          query={query}
+          onQueryChange={setQuery}
+          placeholder="Search returns..."
+          filter={{
+            label: "Status",
+            value: statusFilter,
+            onChange: setStatusFilter,
+            options: returnStatuses.map((item) => [item, item === "All" ? "All statuses" : item]),
+          }}
+        />
         <div className="responsive-table">
           <table>
             <thead>
@@ -190,11 +225,11 @@ function Returns({
                 <th>Refund</th>
                 <th>Status</th>
                 <th>Date</th>
-                <th>Actions</th>
+                {canManage && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
-              {returns.map((record) => (
+              {visibleReturns.map((record) => (
                 <tr key={record._id}>
                   <td>{record._id.slice(-8).toUpperCase()}</td>
                   <td>
@@ -218,52 +253,54 @@ function Returns({
                     </span>
                   </td>
                   <td>{new Date(record.createdAt).toLocaleDateString()}</td>
-                  <td>
-                    <div className="row-actions">
-                      <button
-                        className="icon-btn"
-                        aria-label="Edit return"
-                        onClick={() =>
-                          setEditor({
-                            _id: record._id,
-                            sale: record.sale?._id || record.sale || "",
-                            status: record.status,
-                            refundAmount: String(record.refundAmount || 0),
-                            items: record.items.map((item) => ({
-                              product: item.product?._id || item.product,
-                              quantity: item.quantity,
-                              reason: item.reason || "",
-                            })),
-                          })
-                        }
-                      >
-                        <Pencil size={15} />
-                      </button>
-                      <button
-                        className="icon-btn danger-icon"
-                        aria-label="Delete return"
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              "Delete this return and reverse its stock adjustment?",
-                            )
-                          ) {
-                            perform(
-                              () => api.returns.remove(record._id),
-                              "Return deleted and stock adjustment reversed.",
-                            );
+                  {canManage && (
+                    <td>
+                      <div className="row-actions">
+                        <button
+                          className="icon-btn"
+                          aria-label="Edit return"
+                          onClick={() =>
+                            setEditor({
+                              _id: record._id,
+                              sale: record.sale?._id || record.sale || "",
+                              status: record.status,
+                              refundAmount: String(record.refundAmount || 0),
+                              items: record.items.map((item) => ({
+                                product: item.product?._id || item.product,
+                                quantity: item.quantity,
+                                reason: item.reason || "",
+                              })),
+                            })
                           }
-                        }}
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          className="icon-btn danger-icon"
+                          aria-label="Delete return"
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                "Delete this return and reverse its stock adjustment?",
+                              )
+                            ) {
+                              perform(
+                                () => api.returns.remove(record._id),
+                                "Return deleted and stock adjustment reversed.",
+                              );
+                            }
+                          }}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
-              {!returns.length && (
+              {!visibleReturns.length && (
                 <tr>
-                  <td colSpan="7" className="empty-table-cell">
+                  <td colSpan={canManage ? 7 : 6} className="empty-table-cell">
                     <RotateCcw size={19} /> No returns have been recorded.
                   </td>
                 </tr>

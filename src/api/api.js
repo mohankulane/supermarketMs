@@ -4,13 +4,21 @@ const API_BASE_URL =
 async function request(path, { method = "GET", body } = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
+    credentials: "include",
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
 
   if (!response.ok) {
     const result = await response.json().catch(() => ({}));
-    throw new Error(result.error || `Request failed (${response.status})`);
+    const error = new Error(
+      result.error ||
+        (response.status === 404
+          ? "The server does not support this action yet. Restart the backend server and try again."
+          : `Request failed (${response.status})`),
+    );
+    error.status = response.status;
+    throw error;
   }
   if (response.status === 204) return true;
   return response.json();
@@ -30,19 +38,32 @@ const resource = (path) => ({
 
 export const api = {
   request,
+  auth: {
+    setupStatus: () => request("/auth/setup-status"),
+    setup: (data) => request("/auth/setup", { method: "POST", body: data }),
+    login: (data) => request("/auth/login", { method: "POST", body: data }),
+    me: () => request("/auth/me"),
+    logout: () => request("/auth/logout", { method: "POST" }),
+    changePassword: (password) =>
+      request("/auth/password", { method: "POST", body: { password } }),
+    updateAvatar: (avatarUrl) =>
+      request("/auth/avatar", { method: "PUT", body: { avatarUrl } }),
+  },
   products: resource("/products"),
   suppliers: resource("/suppliers"),
-  customers: resource("/customers"),
   purchases: resource("/purchases"),
+  payPurchase: (id, data) =>
+    request(`/purchases/${encodeURIComponent(id)}/payments`, {
+      method: "POST",
+      body: data,
+    }),
   sales: resource("/sales"),
   expenses: resource("/expenses"),
   returns: resource("/returns"),
-  shifts: resource("/shifts"),
   audit: resource("/audit-logs"),
   settings: {
     get: () => request("/settings"),
     update: (data) => request("/settings", { method: "PATCH", body: data }),
-    branches: resource("/settings/branches"),
     paymentMethods: resource("/settings/payment-methods"),
     users: resource("/settings/users"),
   },
@@ -52,49 +73,59 @@ export const api = {
       method: "POST",
       body: data,
     }),
-  closeShift: (id, data) =>
-    request(`/shifts/${encodeURIComponent(id)}/close`, {
-      method: "POST",
-      body: data,
-    }),
-  openShift: (data) => request("/shifts/open", { method: "POST", body: data }),
 };
 
-export async function loadSystemData() {
+export async function loadSystemData(user) {
+  const permissions = new Set(user?.permissions || []);
+  const can = (permission) =>
+    user?.role === "Owner" ||
+    permissions.has(permission) ||
+    (permission.endsWith(":view") &&
+      permissions.has(permission.replace(/:view$/, ":manage")));
+  const canSales = can("sales:use");
   const [
     products,
     suppliers,
-    customers,
     purchases,
     sales,
     expenses,
     returns,
-    shifts,
     audit,
     dashboard,
     settings,
   ] = await Promise.all([
-    api.products.list(),
-    api.suppliers.list(),
-    api.customers.list(),
-    api.purchases.list(),
-    request("/sales?limit=0"),
-    api.expenses.list(),
-    api.returns.list(),
-    api.shifts.list(),
-    api.audit.list(),
-    api.dashboard(),
-    api.settings.get(),
+    can("inventory:view") || canSales || can("returns:view") || can("reports:view")
+      ? api.products.list()
+      : [],
+    can("suppliers:view") || can("purchases:view") || can("reports:view")
+      ? api.suppliers.list()
+      : [],
+    can("purchases:view") || can("reports:view") ? api.purchases.list() : [],
+    can("invoices:view") ||
+    can("returns:view") ||
+    can("reports:view") ||
+    can("dashboard:view")
+      ? request("/sales?limit=0")
+      : [],
+    can("expenses:view") || can("reports:view") || can("dashboard:view")
+      ? api.expenses.list()
+      : [],
+    can("returns:view") || can("invoices:view") || can("reports:view")
+      ? api.returns.list()
+      : [],
+    can("audit:view") ? api.audit.list() : [],
+    can("dashboard:view") ? api.dashboard() : null,
+    can("settings:manage") || canSales
+      ? api.settings.get()
+      : { paymentMethods: [], users: [], store: {} },
   ]);
   return {
     products,
     suppliers,
-    customers,
     purchases,
     sales,
     expenses,
     returns,
-    shifts,
     audit,
     dashboard,
     settings,

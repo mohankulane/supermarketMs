@@ -1,4 +1,5 @@
 import { useState } from "react";
+import TableHeader, { matchesQuery } from "../components/common/TableHeader.jsx";
 import { Pencil, Plus, Trash2, Wallet } from "lucide-react";
 import { api } from "../api/api.js";
 import Modal from "../components/common/Modal.jsx";
@@ -11,8 +12,19 @@ const blankExpense = () => ({
   expenseDate: new Date().toISOString().slice(0, 10),
 });
 
-function Expenses({ expenses, perform }) {
+function Expenses({ expenses, perform, canManage = false }) {
   const [editor, setEditor] = useState(null);
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("All");
+  const categories = [
+    "All",
+    ...new Set(expenses.map((expense) => expense.category).filter(Boolean)),
+  ];
+  const visibleExpenses = expenses.filter(
+    (expense) =>
+      (category === "All" || expense.category === category) &&
+      matchesQuery(query, expense.category, expense.description, expense.paymentMethod),
+  );
 
   const saveExpense = async (event) => {
     event.preventDefault();
@@ -32,14 +44,31 @@ function Expenses({ expenses, perform }) {
           <h3>Expense records</h3>
           <p>Track store costs and keep expense records up to date.</p>
         </div>
-        <button
-          className="primary-btn"
-          onClick={() => setEditor(blankExpense())}
-        >
-          <Plus size={16} /> Add expense
-        </button>
+        {canManage && (
+          <button
+            className="primary-btn"
+            onClick={() => setEditor(blankExpense())}
+          >
+            <Plus size={16} /> Add expense
+          </button>
+        )}
       </section>
       <section className="box inventory-table-box">
+        <TableHeader
+          title="Expenses"
+          icon={Wallet}
+          count={visibleExpenses.length}
+          total={expenses.length}
+          query={query}
+          onQueryChange={setQuery}
+          placeholder="Search expenses..."
+          filter={{
+            label: "Category",
+            value: category,
+            onChange: setCategory,
+            options: categories.map((item) => [item, item === "All" ? "All categories" : item]),
+          }}
+        />
         <div className="responsive-table">
           <table>
             <thead>
@@ -49,55 +78,57 @@ function Expenses({ expenses, perform }) {
                 <th>Description</th>
                 <th>Payment method</th>
                 <th>Amount</th>
-                <th>Actions</th>
+                {canManage && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
-              {expenses.map((expense) => (
+              {visibleExpenses.map((expense) => (
                 <tr key={expense._id}>
                   <td>{new Date(expense.expenseDate).toLocaleDateString()}</td>
                   <td>{expense.category}</td>
                   <td>{expense.description || "—"}</td>
                   <td>{expense.paymentMethod || "Cash"}</td>
                   <td>${Number(expense.amount).toFixed(2)}</td>
-                  <td>
-                    <div className="row-actions">
-                      <button
-                        className="icon-btn"
-                        aria-label="Edit expense"
-                        onClick={() =>
-                          setEditor({
-                            ...blankExpense(),
-                            ...expense,
-                            expenseDate: new Date(expense.expenseDate)
-                              .toISOString()
-                              .slice(0, 10),
-                          })
-                        }
-                      >
-                        <Pencil size={15} />
-                      </button>
-                      <button
-                        className="icon-btn danger-icon"
-                        aria-label="Delete expense"
-                        onClick={() => {
-                          if (window.confirm("Delete this expense record?")) {
-                            perform(
-                              () => api.expenses.remove(expense._id),
-                              "Expense deleted.",
-                            );
+                  {canManage && (
+                    <td>
+                      <div className="row-actions">
+                        <button
+                          className="icon-btn"
+                          aria-label="Edit expense"
+                          onClick={() =>
+                            setEditor({
+                              ...blankExpense(),
+                              ...expense,
+                              expenseDate: new Date(expense.expenseDate)
+                                .toISOString()
+                                .slice(0, 10),
+                            })
                           }
-                        }}
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          className="icon-btn danger-icon"
+                          aria-label="Delete expense"
+                          onClick={() => {
+                            if (window.confirm("Delete this expense record?")) {
+                              perform(
+                                () => api.expenses.remove(expense._id),
+                                "Expense deleted.",
+                              );
+                            }
+                          }}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
-              {!expenses.length && (
+              {!visibleExpenses.length && (
                 <tr>
-                  <td colSpan="6" className="empty-table-cell">
+                  <td colSpan={canManage ? 6 : 5} className="empty-table-cell">
                     <Wallet size={19} /> No expenses have been recorded.
                   </td>
                 </tr>

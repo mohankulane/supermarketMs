@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 function Modal({
@@ -7,7 +8,7 @@ function Modal({
   children,
   submitLabel = "Save changes",
 }) {
-  return (
+  return createPortal(
     <div className="dialog-overlay" role="presentation" onMouseDown={onClose}>
       <section
         className="dialog-card"
@@ -42,7 +43,8 @@ function Modal({
           </div>
         </form>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

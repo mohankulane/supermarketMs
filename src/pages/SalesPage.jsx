@@ -1,9 +1,9 @@
-import { Minus, Plus, Receipt, Search, Trash2 } from "lucide-react";
+import { Minus, Plus, Receipt, ScanLine, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
+import BarcodeScanner from "../components/common/BarcodeScanner.jsx";
 
 function Sales({
   products,
-  customers,
   cart,
   setCart,
   add,
@@ -12,14 +12,14 @@ function Sales({
   subtotal,
   discountAmount,
   total,
-  customerId,
-  setCustomerId,
   paymentMethod,
   setPaymentMethod,
   paymentMethods,
   pay,
 }) {
   const [query, setQuery] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanMessage, setScanMessage] = useState(null);
   const availablePayments = paymentMethods.filter(
     (method) => method.status !== "Inactive",
   );
@@ -33,6 +33,41 @@ function Sales({
           product.sku.toLowerCase().includes(search)),
     );
   }, [products, query]);
+
+  // Finds a product by its own barcode or its SKU and puts it in the cart.
+  const addByCode = (rawCode) => {
+    const code = String(rawCode || "").trim().toLowerCase();
+    if (!code) return false;
+    const product = products.find(
+      (item) =>
+        (item.barcode && item.barcode.toLowerCase() === code) ||
+        item.sku?.toLowerCase() === code,
+    );
+    if (!product) {
+      setScanMessage({ type: "error", text: `No product found for code ${rawCode}.` });
+      return false;
+    }
+    if (product.stock <= 0) {
+      setScanMessage({ type: "error", text: `${product.name} is out of stock.` });
+      return false;
+    }
+    add(product);
+    setScanMessage({ type: "success", text: `${product.name} added to the cart.` });
+    return true;
+  };
+
+  const handleSearchKey = (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    // USB/Bluetooth scanners type the code and press Enter.
+    if (addByCode(query)) {
+      setQuery("");
+    } else if (catalog.length === 1) {
+      add(catalog[0]);
+      setScanMessage({ type: "success", text: `${catalog[0].name} added to the cart.` });
+      setQuery("");
+    }
+  };
 
   const changeQuantity = (product, quantity) => {
     if (quantity <= 0) {
@@ -59,20 +94,6 @@ function Sales({
             <i /> POS
           </span>
         </div>
-        <label className="field-label customer-field">
-          Customer
-          <select
-            value={customerId}
-            onChange={(event) => setCustomerId(event.target.value)}
-          >
-            <option value="">Walk-in customer</option>
-            {customers.map((customer) => (
-              <option value={customer._id} key={customer._id}>
-                {customer.name}
-              </option>
-            ))}
-          </select>
-        </label>
 
         <div className="sale-cart-list">
           {cart.map((item) => (
@@ -192,17 +213,40 @@ function Sales({
         <div className="panel-title">
           <div>
             <h3>Product catalog</h3>
-            <p>Click a product to add it to this sale.</p>
+            <p>Click a product, or scan its barcode, to add it to this sale.</p>
           </div>
-          <label className="table-search">
-            <Search size={15} />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search catalog..."
-            />
-          </label>
+          <div className="sale-search-row">
+            <label className="table-search">
+              <Search size={15} />
+              <input
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setScanMessage(null);
+                }}
+                onKeyDown={handleSearchKey}
+                placeholder="Search or scan barcode..."
+                aria-label="Search catalog or scan a barcode"
+              />
+            </label>
+            <button
+              type="button"
+              className="outline-btn sale-scan-button"
+              onClick={() => {
+                setScanMessage(null);
+                setScannerOpen(true);
+              }}
+              title="Scan a barcode with the camera"
+            >
+              <ScanLine size={16} /> Scan
+            </button>
+          </div>
         </div>
+        {scanMessage && (
+          <p className={`sale-scan-message ${scanMessage.type}`} role="status">
+            {scanMessage.text}
+          </p>
+        )}
         <div className="sale-product-grid">
           {catalog.map((product) => (
             <button
@@ -238,6 +282,15 @@ function Sales({
           )}
         </div>
       </section>
+      {scannerOpen && (
+        <BarcodeScanner
+          onDetected={(code) => {
+            setScannerOpen(false);
+            addByCode(code);
+          }}
+          onClose={() => setScannerOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 # FreshMart Supermarket Management
 
-FreshMart is a complete supermarket management starter: a teal POS dashboard, catalog + cart workflow, combined product and stock workspace, supplier purchasing workspace, customers, reports, settings, and MongoDB via Docker.
+FreshMart is a responsive supermarket management app with a blue-themed POS, inventory, invoices, customers, purchases, suppliers, returns, expenses, reports, settings, and MongoDB.
 
 ## Run it locally
 
@@ -31,6 +31,15 @@ On Windows PowerShell, use `Copy-Item .env.example .env` for each copy step.
 Use a URL-encoded password in `MONGODB_URI` if it contains URI-reserved
 characters.
 
+On the first visit, create the single Owner account with the first-run setup
+form. The Owner can add team accounts, assign page and management permissions,
+and issue temporary passwords. New users must change their temporary password
+at first sign-in. Cashier accounts start with Sales/POS access only. In
+production, set a persistent, randomly generated `SESSION_SECRET` and set
+`CLIENT_ORIGIN` to the exact HTTPS URL serving the frontend in `server/.env`.
+For example, generate a secret with
+`node -e "console.log(require('node:crypto').randomBytes(48).toString('hex'))"`.
+
 ## Project structure
 
 - `src/pages/` contains one React page per file; shared UI components live in `src/components/`.
@@ -41,11 +50,16 @@ characters.
 
 - Sales: product search, categories, cart quantities, remove items, payment method selection, checkout, and automatic stock deduction.
 - Inventory: searchable products, low-stock status, add product modal, stock receive/adjust controls, and SKU tracking.
-- Suppliers: supplier cards, contact details, purchase metrics, and add supplier modal.
+- Purchases and suppliers: record partial/full invoice payments, track paid and outstanding balances per supplier, and add a new product while creating a purchase.
+- Dashboard: sales and expense totals from all available records, with weekly, monthly, and yearly sales charts.
 - Customers: customer directory with visits, spend, and last visit.
-- Reports: revenue chart, payment mix, top products, and KPI summaries.
-- Settings: store information, tax rate, receipt footer, and notification preferences.
+- Reports: exportable sales, inventory valuation, expenses, supplier balances, purchases, customer activity, returns, and top-selling products with date filters.
+- Settings: store information, logo, payment methods, team permissions, and audit history.
+- Access control: email/password sign-in with server-enforced page and action permissions.
 
 ## API endpoints
 
-The API includes CRUD routes for products, suppliers, customers, purchases, sales, stock movements, dashboard aggregates, and sales reports. Sales reduce product stock and create stock movement records.
+The API includes permission-protected routes for products, suppliers, customers,
+purchases, sales, returns, expenses, dashboard aggregates, and reports. Sales
+reduce product stock and create stock movement records. Shifts are not part of
+the system.
